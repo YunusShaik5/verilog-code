@@ -37,3 +37,7 @@ Do not open `index.html` directly from Finder because browser workers and WebAss
 - `setup-vendor.sh` — restores the `vendor/` directory
 
 Third-party licenses are listed in `THIRD_PARTY_NOTICES.txt` and restored under `vendor/licenses/`.
+
+## Deploy to Vercel
+
+Import this repository into Vercel. The included `vercel.json` runs `build-vercel.sh`, restores the WebAssembly dependencies, and publishes the generated `public/` directory.

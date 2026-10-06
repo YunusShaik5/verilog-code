@@ -1,3 +1,4 @@
 vendor/
 vendor-runtime.tar.gz
+public/
 .DS_Store
