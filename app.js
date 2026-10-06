@@ -1,5 +1,7 @@
 import {examples} from './examples.js';
+import {labPrograms,labTitles,labCollectionText} from './lab-programs.js';
 import {escapeHTML as esc,parseVCD,valueAt,formatValue,timeLabel,topModule,createTestbench,cleanSource} from './core.js';
+Object.assign(examples,Object.fromEntries(labPrograms.map(p=>[p.id,p])));
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const editor=$('#code-editor');
@@ -11,7 +13,7 @@ function save(){try{localStorage.setItem('signal.workspace.v1',JSON.stringify({d
 function updateProject(){
   const ex=examples[state.example];
   $('#project-name').textContent=state.modified?'My circuit':ex?.name||'My circuit';
-  $('#project-tag').textContent=state.modified?'CUSTOM':'EXAMPLE';
+  $('#project-tag').textContent=state.modified?'CUSTOM':ex?.lab?'LAB SHEET':'EXAMPLE';
   if(state.netlist&&!state.modified){const mod=topModule(state.netlist)?.[1];if(mod){const p=Object.values(mod.ports);$('#project-meta').textContent=`${p.filter(x=>x.direction==='input').length} inputs · ${p.filter(x=>x.direction==='output').length} outputs · ${Object.keys(mod.cells).length} logic cells`;}}
   else $('#project-meta').textContent=state.modified?'Edit your design, then run to update the results.':'Ready-to-run design and testbench';
   $('#insight-text').textContent=state.modified?'The testbench controls your inputs over time. Run again after editing, then use the timeline to inspect the new results.':ex?.explanation||'';
@@ -63,10 +65,32 @@ $$('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
 function loadExample(key){
   const ex=examples[key];if(!ex)return;
+  if(ex.lab){$('#time-limit').value=1000;$('#language').value='2012';}
   stopRun(false);pause();Object.assign(state,{design:ex.design,testbench:ex.testbench,example:key,modified:false,netlist:null,netlistSource:''});
   switchFile('design');updateProject();save();$('#sidebar').classList.remove('open');$('#menu-button').setAttribute('aria-expanded','false');run();
 }
 $$('[data-example]').forEach(b=>b.onclick=()=>{const key=b.dataset.example;if(state.modified)confirmReplace('Load this example?','This replaces both editor files. Export your code first if you want to keep your current work.',()=>loadExample(key));else loadExample(key);});
+
+// The complete lab sheet stays in one catalog. Loading keeps the existing
+// overwrite confirmation and uses the same real simulation/diagram pipeline.
+const labFilter=$('#lab-filter'),labCategory=$('#lab-category'),labSearch=$('#lab-search');
+labTitles.forEach((title,i)=>{const option=document.createElement('option');option.value=String(i+1);option.textContent=`Lab ${i+1} — ${title}`;labFilter.append(option);});
+function renderLabs(){
+  const query=labSearch.value.trim().toLowerCase();
+  const matches=labPrograms.filter(p=>(!labFilter.value||p.lab===Number(labFilter.value))&&(!labCategory.value||p.category===labCategory.value)&&`${p.name} ${p.explanation}`.toLowerCase().includes(query));
+  $('#lab-count').textContent=`${matches.length} of ${labPrograms.length} programs`;
+  $('#lab-list').innerHTML=matches.length?matches.map(p=>`<article class="lab-card"><div class="lab-card-head"><span class="tag">Lab ${p.lab} · ${esc(p.question)} · ${esc(p.category)}</span><span class="lab-page">p. ${esc(p.page||'iii')}</span></div><h3>${esc(p.title)}</h3><p>${esc(p.explanation)}</p><div class="lab-card-actions"><button class="button primary" data-load-lab="${p.id}">Load &amp; run →</button><button class="button quiet" data-download-lab="${p.id}">↓ Download .v</button></div></article>`).join(''):'<p class="lab-empty">No programs match. Try another search or lab.</p>';
+}
+labFilter.onchange=labCategory.onchange=labSearch.oninput=renderLabs;
+$('#labs-button').onclick=()=>{renderLabs();$('#labs-dialog').showModal();labSearch.focus();};
+$('#lab-download-all').onclick=()=>{download('all-lab-programs.md',labCollectionText(),'text/markdown');toast(`Downloaded all ${labPrograms.length} programs and testbenches`);};
+$('#lab-list').onclick=e=>{
+  const button=e.target.closest('button');if(!button)return;
+  if(button.dataset.downloadLab){const p=examples[button.dataset.downloadLab];download(`${p.id}.v`,p.design+'\n// ---------- TESTBENCH ----------\n'+p.testbench);return;}
+  const key=button.dataset.loadLab;if(!key)return;
+  $('#labs-dialog').close();
+  if(state.modified)confirmReplace('Load this lab program?','Both editor files will be replaced. Export your current work first if you want to keep it.',()=>loadExample(key));else loadExample(key);
+};
 
 function log(message,error=false){state.log.push(message);$('#console-output').textContent=state.log.join('\n\n');$('#log-indicator').textContent=error?'Check messages':'Updated';if(error){$('#console-details').open=true;$('#log-indicator').style.color='var(--gold)';}}
 function status(message,type=''){$('#simulation-status').textContent=message;$('#simulation-status').className='status-text '+type;}
