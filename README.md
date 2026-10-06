@@ -42,4 +42,4 @@ Third-party licenses are listed in `THIRD_PARTY_NOTICES.txt` and restored under 
 
 Import this repository into Vercel. The included `vercel.json` runs `build-vercel.sh`, restores the WebAssembly dependencies, and publishes the generated `public/` directory.
 
-Temporary preview: <https://temporary-spry-saffron-gyak2xn.vercel.app> (expires after 60 minutes unless claimed).
+Live app: <https://verilog-code.vercel.app>.
