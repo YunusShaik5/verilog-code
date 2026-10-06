@@ -40,6 +40,8 @@ Third-party licenses are listed in `THIRD_PARTY_NOTICES.txt` and restored under 
 
 ## Deploy to Vercel
 
-Import this repository into Vercel. The included `vercel.json` runs `build-vercel.sh`, restores the WebAssembly dependencies, and publishes the generated `public/` directory.
-
 Live app: <https://verilog-code.vercel.app>.
+
+The included `vercel.json` runs `build-vercel.sh`, restores the WebAssembly dependencies, and publishes the generated `public/` directory.
+
+To deploy automatically when changes are pushed to GitHub, connect this repository under the Vercel project's **Settings > Git**. Until GitHub is connected, deploy manually from the project root with `npx vercel --prod`.
