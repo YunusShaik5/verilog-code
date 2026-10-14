@@ -2,3 +2,8 @@ vendor/
 vendor-runtime.tar.gz
 public/
 .DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+test-results/

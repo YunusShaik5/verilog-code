@@ -10,7 +10,7 @@ const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
 const window=new Window({url:'https://signal.test/',settings:{disableJavaScriptFileLoading:true,disableJavaScriptEvaluation:true,disableCSSFileLoading:true}});
 const doc=window.document;doc.write(read('index.html'));
 window.happyDOM.settings.disableJavaScriptEvaluation=false;
-Object.assign(window,{examples,labPrograms,labTitles,labCollectionText,...core,esc:core.escapeHTML,structuredClone,ResizeObserver:class{observe(){}disconnect(){}}});
+Object.assign(window,{initAccounts:()=>({ready:()=>true,onEdit(){},detach(){}}),examples,labPrograms,labTitles,labCollectionText,...core,esc:core.escapeHTML,structuredClone,ResizeObserver:class{observe(){}disconnect(){}}});
 const downloads=[];
 window.URL.createObjectURL=blob=>{downloads.push(blob);return 'blob:https://signal.test/download';};
 window.URL.revokeObjectURL=()=>{};
@@ -24,7 +24,7 @@ const js=read('app.js').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url
 window.eval(js+'\nwindow.__qa={state,run,setCursor,loadExample,renderLabs};');
 const qa=window.__qa,$=s=>doc.querySelector(s),$$=s=>[...doc.querySelectorAll(s)];
 async function idle(){for(let i=0;i<1200;i++){if(!qa.state.busy)return;await new Promise(r=>setTimeout(r,50));}throw new Error('UI timeout');}
-await idle();assert(qa.state.data);assert($('#diagram-content svg'));
+await qa.run();await idle();assert(qa.state.data);assert($('#diagram-content svg'));
 $('#labs-button').click();assert($('#labs-dialog').open);assert.equal($$('.lab-card').length,71);
 assert.equal($('#lab-filter').options.length,11);
 $('#lab-filter').value='6';$('#lab-filter').dispatchEvent(new window.Event('change'));assert.equal($$('.lab-card').length,7);
@@ -41,7 +41,7 @@ $('#play-button').click();assert(qa.state.playing);$('#play-button').click();ass
 $('#code-editor').value+='\n// my study note';$('#code-editor').dispatchEvent(new window.Event('input'));
 $('#labs-button').click();$('[data-load-lab="lab5-q2"]').click();assert($('#confirm-dialog').open);$('#confirm-cancel').click();assert(qa.state.design.includes('my study note'));
 $('#labs-button').click();$('[data-load-lab="lab5-q2"]').click();$('#confirm-accept').click();await idle();assert.equal(qa.state.example,'lab5-q2');assert($('#console-output').textContent.includes('PASS: lab5-q2'));assert($('#diagram-content svg'));
-assert.equal(JSON.parse(window.localStorage.getItem('signal.workspace.v1')).example,'lab5-q2');
+assert.equal(window.localStorage.getItem('signal.workspace.v1'),null); // No shared-device source persistence.
 assert.equal($('#time-limit').value,'1000');
-console.log('PASS UI: 71 cards, filters/search, empty state, downloads, real simulations/diagrams, playback, overwrite cancel/accept, persistence.');
+console.log('PASS UI: 71 cards, filters/search, empty state, downloads, real simulations/diagrams, playback, overwrite cancel/accept, no shared local source persistence.');
 await window.happyDOM.close();

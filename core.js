@@ -51,6 +51,7 @@ export function formatValue(value,base='bin'){
   try{return BigInt('0b'+value).toString(base==='hex'?16:10).toUpperCase();}catch{return value;}
 }
 export function timeLabel(ns){
+  if(ns>0&&ns<.001)return `${Number((ns*1e6).toFixed(3))} fs`;
   if(ns===0)return '0 ns';
   if(ns<1)return `${Number((ns*1000).toFixed(3))} ps`;
   if(ns>=1000)return `${Number((ns/1000).toFixed(3))} µs`;
@@ -82,8 +83,28 @@ export function createTestbench(netlist){
   if(resets.length){lines.push('    #12;');for(const [n]of resets)lines.push(`    ${n} = ${low(n)?1:0};`);}
   else if(clocks.length)lines.push('    #2; // Change data away from the clock edge.');
   if(data.length){
-    lines.push(`    // ${width>5?'32 sample vectors; extend this loop for more coverage.':'Sweep every input combination.'}`,`    for (i = 0; i < ${count}; i = i + 1) begin`,`      {${data.map(([n])=>n).join(', ')}} = i;`,'      #10;','    end');
+    const target=`{${data.map(([n])=>n).join(', ')}}`;
+    if(width<=5){
+      lines.push('    // Sweep every input combination.',`    for (i = 0; i < ${count}; i = i + 1) begin`,`      ${target} = i;`,'      #10;','    end');
+    }else{
+      // An integer count from 0 to 31 never drives the upper bits. Sample across
+      // the full vector, including select/MSB bits and vectors wider than 32 bits.
+      if(width>4096)throw new Error('For more than 4096 input bits, write a custom testbench.');
+      const patterns=new Set(['0'.repeat(width),'1'.repeat(width),'10'.repeat(Math.ceil(width/2)).slice(0,width),'01'.repeat(Math.ceil(width/2)).slice(0,width)]);
+      const positions=Math.min(width,24);
+      for(let i=0;i<positions;i++){
+        const bit=Math.round(i*(width-1)/(positions-1));
+        const v=Array(width).fill('0');v[bit]='1';patterns.add(v.join(''));patterns.add(v.map(x=>x==='1'?'0':'1').join(''));
+      }
+      lines.push('    // Sample full-width patterns; this is not an exhaustive test.');
+      for(const p of patterns)lines.push(`    ${target} = ${width}'b${p}; #10;`);
+    }
   }else lines.push('    #100;');
   lines.push('    $finish;','  end','endmodule','');
   return lines.join('\n');
+}
+
+// Remove comments without mistaking comment-like text inside strings for comments.
+export function withoutComments(source){
+  return source.replace(/"(?:\\.|[^"\\])*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, token=>token.startsWith('/')?token.replace(/[^\n]/g,' '):token);
 }

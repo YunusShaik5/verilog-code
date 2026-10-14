@@ -1,3 +1,4 @@
+import {initAccounts} from './accounts.js';
 import {examples} from './examples.js';
 import {labPrograms,labTitles,labCollectionText} from './lab-programs.js';
 import {escapeHTML as esc,parseVCD,valueAt,formatValue,timeLabel,topModule,createTestbench,cleanSource} from './core.js';
@@ -9,11 +10,12 @@ const state={design:examples.full.design,testbench:examples.full.testbench,examp
 let saveTimer,toastTimer,confirmAction=null;
 
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),3600);}
-function save(){try{localStorage.setItem('signal.workspace.v1',JSON.stringify({design:state.design,testbench:state.testbench,example:state.example,modified:state.modified,limit:$('#time-limit').value,language:$('#language').value}));$('#save-status').innerHTML='<span class="online-dot"></span>Saved on this device';}catch{$('#save-status').textContent='Export to save your code';}}
+let accounts=null, privateFileName=null;
+function save(){accounts?.onEdit();}
 function updateProject(){
   const ex=examples[state.example];
-  $('#project-name').textContent=state.modified?'My circuit':ex?.name||'My circuit';
-  $('#project-tag').textContent=state.modified?'CUSTOM':ex?.lab?'LAB SHEET':'EXAMPLE';
+  $('#project-name').textContent=privateFileName || (state.modified?'My circuit':ex?.name||'My circuit');
+  $('#project-tag').textContent=privateFileName?'PRIVATE':state.modified?'CUSTOM':ex?.lab?'LAB SHEET':'EXAMPLE';
   if(state.netlist&&!state.modified){const mod=topModule(state.netlist)?.[1];if(mod){const p=Object.values(mod.ports);$('#project-meta').textContent=`${p.filter(x=>x.direction==='input').length} inputs · ${p.filter(x=>x.direction==='output').length} outputs · ${Object.keys(mod.cells).length} logic cells`;}}
   else $('#project-meta').textContent=state.modified?'Edit your design, then run to update the results.':'Ready-to-run design and testbench';
   $('#insight-text').textContent=state.modified?'The testbench controls your inputs over time. Run again after editing, then use the timeline to inspect the new results.':ex?.explanation||'';
@@ -25,7 +27,7 @@ function markStale(){
   pause();state.modified=true;state.stale=true;updateProject();
   $('#simulation-status').textContent='Code changed · run to update';$('#simulation-status').className='status-text';
   $('#diagram-time').textContent=state.data?'PREVIOUS RUN':'AWAITING SIMULATION';
-  $('#save-status').textContent='Saving…';clearTimeout(saveTimer);saveTimer=setTimeout(save,400);
+  clearTimeout(saveTimer);save();
 }
 function highlight(text){
   const pattern=/(\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|\b(?:module|endmodule|input|output|inout|wire|reg|logic|integer|parameter|localparam|assign|always|always_comb|always_ff|initial|begin|end|if|else|case|endcase|default|for|while|repeat|forever|posedge|negedge|or|not|and|nand|nor|xor|xnor|generate|endgenerate|genvar|function|endfunction|task|endtask)\b|\$\w+|`\w+|\b\d+'[sS]?[bBoOdDhH][\da-fA-F_xXzZ?]+|\b\d+(?:\.\d+)?\b|[&|^~!+*<>=?:]+)/g;
@@ -64,7 +66,7 @@ $('#confirm-cancel').onclick=()=>$('#confirm-dialog').close();
 $$('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
 function loadExample(key){
-  const ex=examples[key];if(!ex)return;
+  const ex=examples[key];if(!ex)return;clearTimeout(saveTimer);accounts?.detach();
   if(ex.lab){$('#time-limit').value=1000;$('#language').value='2012';}
   stopRun(false);pause();Object.assign(state,{design:ex.design,testbench:ex.testbench,example:key,modified:false,netlist:null,netlistSource:''});
   switchFile('design');updateProject();save();$('#sidebar').classList.remove('open');$('#menu-button').setAttribute('aria-expanded','false');run();
@@ -116,6 +118,7 @@ function clearResults(){
   resetDiagram();$('#probe-strip').innerHTML='<span class="muted-text">Waiting for results…</span>';$('#signal-count').textContent='0 SIGNALS';$('#current-time').textContent='0 ns';$('#end-time').textContent='—';$('#timeline').value=0;$('#diagram-time').textContent='COMPILING';$('#cell-count').textContent='Synthesized from your code';
 }
 async function run(){
+  if(!accounts?.ready())return;
   if(state.busy){stopRun();return;}
   if(!state.design.trim()){toast('Add a Verilog module in design.v first.');return;}
   const limit=Number($('#time-limit').value);
@@ -136,7 +139,7 @@ async function run(){
   const synthesis=job('synthesize',params).then(async result=>{
     if(id!==state.generation)return;state.netlist=result.netlist;state.netlistSource=params.design;await renderDiagram();if(id!==state.generation)return;diagramOK=true;
     log('CIRCUIT\n'+($('#diagram-mode').value==='rtl'?'RTL':'Gate-level')+' diagram generated from design.v.'+(result.log.trim()?'\n'+result.log.trim():''));updateProject();
-    if(state.data){chooseDefaultSignals();renderSignalPicker();renderWaveforms();setCursor(state.cursor);}
+    if(state.data){renderSignalPicker();renderWaveforms();setCursor(state.cursor);}
   }).catch(e=>{
     if(id!==state.generation)return;log('CIRCUIT MESSAGE\n'+e.message,true);$('#diagram-content').innerHTML=`<div class="empty-state"><span class="empty-icon">◇</span><strong>Diagram unavailable for this design.</strong><p>${esc(e.message.split('\n').filter(x=>/error/i.test(x)).slice(-1)[0]||e.message.slice(0,180))}</p><p>Only synthesizable code belongs in design.v. Your waveform simulation runs separately.</p></div>`;
     $('#diagram-time').textContent='SEE SIMULATION LOG';
@@ -275,9 +278,30 @@ $('#help-button').onclick=$('#guide-button').onclick=()=>$('#help-dialog').showM
 $('#menu-button').onclick=()=>{const open=$('#sidebar').classList.toggle('open');$('#menu-button').setAttribute('aria-expanded',String(open));};
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();run();}if(e.key==='Escape'){$('#signal-picker').hidden=true;$('#sidebar').classList.remove('open');}});
 let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(renderWaveforms,150);}).observe($('#wave-scroll'));
-window.addEventListener('pagehide',save);
 
-try{const stored=JSON.parse(localStorage.getItem('signal.workspace.v1'));if(stored&&typeof stored.design==='string'&&typeof stored.testbench==='string'){Object.assign(state,{design:stored.design,testbench:stored.testbench,example:stored.example||'full',modified:!!stored.modified});if(stored.limit)$('#time-limit').value=stored.limit;if(['2005','2012'].includes(stored.language))$('#language').value=stored.language;}}catch{}
-switchFile('design');updateProject();
-// The initial example is compiled live; there are no canned circuit or waveform results.
-if(!state.modified)run();
+
+function resetPrivateWorkspace(){
+  clearTimeout(saveTimer);stopRun(false);clearResults();privateFileName=null;
+  Object.assign(state,{design:examples.full.design,testbench:examples.full.testbench,example:'full',modified:false,file:'design',log:[]});
+  editor.value=state.design;switchFile('design');updateProject();
+  $('#console-output').textContent='';$('#console-details').open=false;$('#signal-picker').replaceChildren();$('#confirm-message').textContent='';confirmAction=null;
+  $('#wave-content').innerHTML='<div class="empty-state wave-empty"><strong>Run your code to see timing waveforms.</strong></div>';
+  $('#diagram-content').innerHTML='<div class="empty-state"><strong>Run your code to see the circuit.</strong></div>';
+  $('#simulation-status').textContent='Ready';$('#diagram-time').textContent='AWAITING SIMULATION';
+  $('#time-limit').value=1000;$('#language').value='2012';
+}
+accounts=initAccounts({
+  toast,confirm:confirmReplace,reset:resetPrivateWorkspace,
+  snapshot:()=>({design:state.design,testbench:state.testbench,language:$('#language').value,limit:$('#time-limit').value}),
+  name:name=>{privateFileName=name;updateProject();},
+  ready:()=>{switchFile('design');updateProject();},
+  load:program=>{
+    clearTimeout(saveTimer);stopRun(false);clearResults();
+    Object.assign(state,{design:program.design,testbench:program.testbench,example:'',modified:false,log:[]});
+    $('#time-limit').value=program.time_limit;$('#language').value=program.language;
+    $('#console-output').textContent='';$('#signal-picker').replaceChildren();
+    $('#wave-content').innerHTML='<div class="empty-state wave-empty"><strong>File opened. Run to see timing waveforms.</strong></div>';
+    $('#diagram-content').innerHTML='<div class="empty-state"><strong>Run to see the circuit.</strong></div>';
+    status('File ready · run simulation');switchFile('design');updateProject();
+  }
+});

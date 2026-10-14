@@ -12,6 +12,15 @@ A browser-based Verilog playground with real compilation and simulation, generat
 - Local downloads for code, diagrams, and waveform data
 - **71 lab-sheet reference programs** covering all 10 practical labs, solved examples, main exercises, and additional exercises from the 2024 DSD manual
 
+## Private workspaces and Google sign-in
+
+See [ACCOUNT_SETUP.md](ACCOUNT_SETUP.md) to connect Google login and private storage
+before deploying this release. All users sign in, then choose a unique username.
+**New file**, **Save**, **Save as**, and **My private files** manage named programs.
+Each program includes design and testbench source. Saved files autosave; drafts
+remain in memory until saved. Storage starts at 5 MiB per account and can be set
+from 1–10 MiB. Other users cannot read or modify your programs.
+
 ## Lab sheet programs
 
 Click **Lab sheet programs** in the sidebar (on a phone, first open ☰).
@@ -28,23 +37,29 @@ Individual exported `.v` files can be run with `iverilog -g2012 -s tb -o simulat
 
 ## Verify changes
 
-Restore dependencies with `bash setup-vendor.sh`, then run `node tests/labs.mjs`.
-This checks all 71 self-checking testbenches with the bundled Icarus simulator and synthesizes every design with Yosys. It also checks the downloadable collection against the catalog.
-For DOM interaction tests, install `happy-dom` locally without committing dependencies and run `node tests/ui.mjs`, or set `SIGNAL_DOM_TEST_MODULE` to its module entry file.
+```bash
+npm ci
+npm test
+npm run test:labs
+```
+
+Tests cover database ownership restrictions, username and filename uniqueness,
+quotas, stale-save rejection, account switching, private-file controls, waveform
+recording and timing, generated input coverage, and all 71 lab simulations.
+Live Google consent/callback testing requires the setup above.
 
 ## Run locally
 
-The third-party WebAssembly runtime is stored as split archive parts so the complete project can be uploaded reliably.
+Set the public account settings described in [ACCOUNT_SETUP.md](ACCOUNT_SETUP.md),
+then build and serve the generated site:
 
 ```bash
-chmod +x setup-vendor.sh
-./setup-vendor.sh
-python3 -m http.server 8000
+npm run build
+python3 -m http.server 8000 --directory public
 ```
 
-Then open <http://localhost:8000>.
-
-Do not open `index.html` directly from Finder because browser workers and WebAssembly require an HTTP server.
+Open <http://localhost:8000>. Without account settings, the sign-in screen explains
+that setup is required. Browser workers and WebAssembly require an HTTP server.
 
 ## Project structure
 
@@ -63,6 +78,7 @@ Third-party licenses are listed in `THIRD_PARTY_NOTICES.txt` and restored under 
 
 Live app: <https://verilog-code.vercel.app>.
 
+Configure Google/Supabase using [ACCOUNT_SETUP.md](ACCOUNT_SETUP.md) first.
 The included `vercel.json` runs `build-vercel.sh`, restores the WebAssembly dependencies, and publishes the generated `public/` directory.
 
 To deploy automatically when changes are pushed to GitHub, connect this repository under the Vercel project's **Settings > Git**. Until GitHub is connected, deploy manually from the project root with `npx vercel --prod`.

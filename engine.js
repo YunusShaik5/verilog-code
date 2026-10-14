@@ -1,4 +1,4 @@
-import {cleanSource} from './core.js';
+import {cleanSource,withoutComments} from './core.js';
 
 export async function simulate({design,testbench,limit=1000,language='2012'},stage=()=>{},options={}){
   stage('Loading simulator');
@@ -9,7 +9,7 @@ export async function simulate({design,testbench,limit=1000,language='2012'},sta
   const pp=await makePP({...config,print:x=>source.push(x),printErr:x=>diagnostics.push(x)});
   const d=cleanSource(design),tb=cleanSource(testbench);
   const guard='`timescale 1ns/1ps\nmodule __signal_time_limit; initial begin #'+Math.max(1,Math.min(100000,Number(limit)||1000))+'; $display("[Signal] Simulation time limit reached."); $finish; end endmodule\n';
-  const trace=/\$dumpvars\s*\(/.test(d+'\n'+tb)?'':'\nmodule __signal_trace; initial begin $dumpfile("signal.vcd"); $dumpvars(0); end endmodule\n';
+  const trace=/\$dumpvars\s*\(/.test(withoutComments(d+'\n'+tb))?'':'\nmodule __signal_trace; initial begin $dumpfile("signal.vcd"); $dumpvars(0); end endmodule\n';
   pp.FS.writeFile('/design.v',d+'\n'); pp.FS.writeFile('/testbench.v',tb+'\n');pp.FS.writeFile('/guard.v',guard+trace);
   const ppResult=pp.callMain(['-L','/design.v','/testbench.v','/guard.v']);
   if(ppResult)throw new Error(diagnostics.join('\n')||'Preprocessing failed.');
@@ -24,7 +24,7 @@ export async function simulate({design,testbench,limit=1000,language='2012'},sta
   stage('Simulating');
   const vvp=await makeVVP({...config,print:x=>stdout.push(x),printErr:x=>stdout.push(x)});
   vvp.FS.writeFile('/simulation.vvp',compiled);
-  const exitCode=vvp.callMain(['/simulation.vvp']);
+  const exitCode=vvp.callMain(['-n','/simulation.vvp']);
   if(exitCode)throw new Error(stdout.join('\n')||'Simulation failed.');
   const names=vvp.FS.readdir('/').filter(n=>n.endsWith('.vcd'));
   let vcd='';
